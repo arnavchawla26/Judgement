@@ -5,6 +5,11 @@
 /* Judgement Card Game Design System */
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+    min-height: 100dvh; /* iOS dynamic viewport */
+    background: var(--bg, #0b1522);
+  }
   :root {
     /* Gaming Background - Dark poker table */
     --background: 140 20% 8%;
@@ -139,6 +144,8 @@
     @apply bg-background text-foreground font-sans;
     background: var(--gradient-table);
     min-height: 100vh;
+    overscroll-behavior-y: none;
+    -webkit-touch-callout: none;
   }
 }
 

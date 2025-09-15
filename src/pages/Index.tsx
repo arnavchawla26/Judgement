@@ -410,7 +410,7 @@ const Index = () => {
 
   if (!isJoined) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 overflow-x-hidden">
+      <div className="min-h-screen app-shell flex items-center justify-center p-4 overflow-x-hidden">
         <div className="game-table lg:rounded-3xl p-8 w-full max-w-3xl">
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold mb-4 animate-fade-in-up">Judgement</h1>
@@ -535,10 +535,10 @@ const Index = () => {
   );
 
   return (
-    <div className="min-h-screen p-4" style={{ paddingBottom: isMobile && isBiddingOpen ? 'calc(96px + env(safe-area-inset-bottom))' : 'env(safe-area-inset-bottom)' }}>
+    <div className="min-h-screen app-shell p-4" style={{ paddingBottom: isMobile && isBiddingOpen ? 'calc(96px + env(safe-area-inset-bottom))' : 'env(safe-area-inset-bottom)' }}>
       <div className="max-w-7xl mx-auto">
         {usingServer && effectiveGameState?.id && <RoomCodePill code={effectiveGameState.id} />}
-        <div className="flex justify-end mb-2">
+        <div className="flex justify-end mb-2 safe-top">
           <Button variant="outline" onClick={() => setShowScoreboard(true)}>Scoreboard</Button>
         </div>
         <GameTable

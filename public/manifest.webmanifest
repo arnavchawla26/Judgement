@@ -1,0 +1,11 @@
+{
+  "name": "Judgement",
+  "short_name": "Judgement",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0b1522",
+  "theme_color": "#0b1522",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}
