@@ -266,6 +266,71 @@
   }
 }
 
+/* Premium mobile theme tokens and helpers */
+:root{
+  --bg-0:#08131f; --bg-1:#0b1522; --bg-2:#0f1b2d;
+  --ink:#eaf1ff; --ink-dim:#aab7d0;
+  --gold:#f5c451; --teal:#59c3c3; --danger:#ff6b6b;
+  --glass:rgba(255,255,255,.06); --ring:rgba(245,196,81,.55);
+  --shadow:0 16px 40px rgba(0,0,0,.45);
+}
+
+/* felt + vignette canvas (safe for desktop too) */
+html, body, #root{
+  height:100%;
+  min-height:100dvh;
+  color:var(--ink);
+  background:
+    radial-gradient(1200px 500px at 50% -10%, rgba(255,255,255,.06), transparent 60%),
+    radial-gradient(1200px 600px at 50% 110%, rgba(0,0,0,.45), transparent 60%),
+    linear-gradient(180deg, var(--bg-0), var(--bg-1));
+}
+
+@media (max-width:1023.98px){
+  .app-shell{
+    min-height:100dvh;
+    padding-left:max(env(safe-area-inset-left),12px);
+    padding-right:max(env(safe-area-inset-right),12px);
+  }
+  .safe-top{ padding-top:max(env(safe-area-inset-top),10px); }
+  .safe-bottom{ padding-bottom:max(env(safe-area-inset-bottom),12px); }
+}
+
+/* glass panel / pills */
+.ui-glass{
+  background:var(--glass);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px; box-shadow:var(--shadow);
+}
+.ui-pill{
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:12px; padding:4px 10px;
+}
+
+/* premium cards */
+.card-3d{
+  background:#fff; border-radius:12px;
+  box-shadow:0 10px 24px rgba(0,0,0,.35), inset 0 0 0 1px rgba(0,0,0,.05);
+  position:relative;
+}
+.card-3d::after{
+  content:""; position:absolute; inset:0; border-radius:12px;
+  background:linear-gradient(180deg, rgba(255,255,255,.25), rgba(255,255,255,0) 40%);
+  pointer-events:none;
+}
+.card-tap{ transition:transform .12s cubic-bezier(.2,.6,.2,1), box-shadow .12s; }
+.card-tap:active{ transform:translateY(1px) scale(.99); }
+
+.glow-gold{ box-shadow:0 0 0 3px rgba(245,196,81,.35), 0 8px 24px rgba(245,196,81,.25); }
+.glow-teal{ box-shadow:0 0 0 3px rgba(89,195,195,.35), 0 8px 24px rgba(89,195,195,.25); }
+
+.play-area{ min-height:38dvh; }
+
+@keyframes pulse-quick{ 0%{transform:scale(.98)} 100%{transform:scale(1)} }
+.btn-pulse:active{ animation:pulse-quick .12s ease-out; }
+
 /* Keyframe Animations */
 @keyframes trump-glow {
   0% { box-shadow: 0 0 15px hsl(var(--trump-glow) / 0.4); }

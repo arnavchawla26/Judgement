@@ -92,7 +92,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       <div className="w-full">
         <div className="grid gap-2 sm:gap-3 md:gap-4 grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 place-items-center px-2" style={{ ['--cardW' as any]: 'clamp(56px, 9vw, 96px)' }}>
           {currentPlayer.cards.map((card) => (
-            <div key={card.id} className="flex items-center justify-center">
+            <div key={card.id} className="card-3d card-tap flex items-center justify-center" style={{ width: 'var(--cardW)', aspectRatio: '63/88' }}>
               <PlayingCard
                 card={card}
                 isTrump={card.suit === currentRound?.trumpSuit}
@@ -124,6 +124,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           <div
             key={trickCard.card.id}
             data-play-card={trickCard.card.id}
+            className="card-3d"
             style={{ width: 'clamp(72px, min(8.2vh, 12vw), 132px)', aspectRatio: '63/88' }}
           >
             <PlayingCard card={trickCard.card} size="sm" isTrump={trickCard.card.suit === currentRound.trumpSuit} />
@@ -137,7 +138,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   const renderScoreboard = () => (
-    <div className="score-display rounded-lg p-4 min-w-64">
+    <div className={cn('score-display rounded-lg p-4 min-w-64', isMobile && 'ui-glass')}>
       <h3 className="font-bold text-center mb-3">Round {currentRound?.roundNumber || 1}</h3>
       
       <div className="space-y-2">
@@ -273,10 +274,12 @@ export const GameTable: React.FC<GameTableProps> = ({
         <div className="flex items-start justify-center gap-3 md:gap-4 w-full">
           {/* Trump indicator */}
           {currentRound && (
-            <TrumpIndicator
-              trumpSuit={currentRound.trumpSuit}
-              className="animate-bounce-in scale-90 md:scale-100"
-            />
+            <div className={cn(isMobile && 'glow-gold rounded-xl p-1')}>
+              <TrumpIndicator
+                trumpSuit={currentRound.trumpSuit}
+                className="animate-bounce-in scale-90 md:scale-100"
+              />
+            </div>
           )}
 
           {/* Trick area */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Minus, Plus } from 'lucide-react';
@@ -11,6 +11,7 @@ interface BiddingInterfaceProps {
   // House rule: last bidder cannot make sum of bids == hand size
   disallowSumEquals?: boolean;
   disallowedBid?: number | null; // When disallowSumEquals and user is last bidder
+  variant?: 'dialog' | 'bottomSheet' | 'keypadTall';
 }
 
 export const BiddingInterface: React.FC<BiddingInterfaceProps> = ({
@@ -20,21 +21,102 @@ export const BiddingInterface: React.FC<BiddingInterfaceProps> = ({
   className,
   disallowSumEquals = false,
   disallowedBid = null,
+  variant = 'dialog',
 }) => {
-  const [selectedBid, setSelectedBid] = useState<number>(0);
+  const [selectedBid, setSelectedBid] = useState<number | null>(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 640px)');
+    const on = () => setIsMobile(mq.matches);
+    mq.addEventListener?.('change', on) ?? mq.addListener(on);
+    on();
+    return () => mq.removeEventListener?.('change', on) ?? mq.removeListener(on);
+  }, []);
 
   const handleBidChange = (delta: number) => {
-    setSelectedBid(prev => Math.max(0, Math.min(maxBid, prev + delta)));
+    setSelectedBid(prev => {
+      const base = typeof prev === 'number' ? prev : 0;
+      return Math.max(0, Math.min(maxBid, base + delta));
+    });
   };
 
   const isBidAllowed = !(
-    disallowSumEquals && disallowedBid !== null && selectedBid === disallowedBid
+    disallowSumEquals && disallowedBid !== null && selectedBid !== null && selectedBid === disallowedBid
   );
 
   const handleSubmitBid = () => {
-    if (!isBidAllowed) return;
+    if (!isBidAllowed || selectedBid === null) return;
     onBid(selectedBid);
   };
+
+  // Mobile keypadTall variant
+  if (isMobile && variant === 'keypadTall') {
+    const numbers = Array.from({ length: Math.min(11, maxBid + 1) }, (_, i) => i);
+    return (
+      <div className="safe-bottom fixed left-0 right-0 bottom-0 z-50 ui-surface px-4 pt-3 pb-3">
+        <div className="text-center mb-2" style={{ color: 'var(--muted)' }}>Select your bid</div>
+        <div className="grid grid-cols-4 gap-2">
+          {numbers.map(n => (
+            <button key={n}
+              className={cn('ui-chip py-3', selectedBid === n && 'ring-2')}
+              style={selectedBid === n ? { boxShadow: '0 0 0 2px var(--ring) inset' } : undefined}
+              onClick={() => setSelectedBid(n)}
+              disabled={disabled || (disallowSumEquals && disallowedBid !== null && n === disallowedBid)}
+            >{n}</button>
+          ))}
+          <button className="ui-chip py-3" onClick={() => setSelectedBid(null)}>Clear</button>
+        </div>
+        <button
+          onClick={handleSubmitBid}
+          disabled={disabled || selectedBid === null || !isBidAllowed}
+          className="btn-pulse mt-3 w-full rounded-xl py-3 font-semibold text-black disabled:opacity-50"
+          style={{ background: 'linear-gradient(90deg, var(--accent), var(--accent-2))', boxShadow: '0 10px 26px rgba(60,199,183,.32)' }}
+        >
+          Confirm Bid: {selectedBid ?? '—'}
+        </button>
+      </div>
+    );
+  }
+
+  // Mobile bottom sheet (stepper) fallback
+  if (isMobile && variant !== 'dialog') {
+    return (
+      <div className="safe-bottom fixed left-0 right-0 bottom-0 z-50 ui-surface px-4 pt-3 pb-3">
+        <div className="text-center text-sm font-semibold mb-1">Place Your Bid</div>
+        <div className="flex items-center justify-center gap-5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBidChange(-1)}
+            disabled={disabled || (selectedBid ?? 0) === 0}
+            className="ui-chip"
+          >
+            −
+          </Button>
+          <div className="w-10 text-center text-2xl font-extrabold">{selectedBid ?? 0}</div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBidChange(1)}
+            disabled={disabled || (selectedBid ?? 0) === maxBid}
+            className="ui-chip"
+          >
+            +
+          </Button>
+        </div>
+        <button
+          onClick={handleSubmitBid}
+          disabled={disabled || selectedBid === null || !isBidAllowed}
+          className="btn-pulse mt-2 w-full rounded-xl text-black font-semibold py-3 disabled:opacity-50"
+          style={{ background: 'linear-gradient(90deg, var(--primary), var(--accent))', boxShadow:'0 10px 26px rgba(124,92,255,.35)' }}
+        >
+          Confirm Bid: {selectedBid ?? '—'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -93,10 +175,7 @@ export const BiddingInterface: React.FC<BiddingInterfaceProps> = ({
             size="sm"
             onClick={() => setSelectedBid(i)}
             disabled={disabled || (disallowSumEquals && disallowedBid !== null && i === disallowedBid)}
-            className={cn(
-              'bid-button w-10 h-10 p-0',
-              selectedBid === i && 'selected'
-            )}
+            className={cn('bid-button w-10 h-10 p-0', selectedBid === i && 'selected')}
           >
             {i}
           </Button>
