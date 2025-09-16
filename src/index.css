@@ -411,3 +411,150 @@ html, body, #root{
     box-shadow: 0 0 20px hsl(var(--primary) / 0.6);
   }
 }
+
+/* --- Mobile-only helpers --- */
+@media (max-width:1023.98px){
+  /* reserve space at bottom when a sheet is open */
+  .pad-for-sheet { padding-bottom: calc(var(--sheet-h, 0px) + env(safe-area-inset-bottom)); }
+
+  /* top HUD sits under status bar; low z so it never covers players */
+  .hud-mobile { position: sticky; top: max(env(safe-area-inset-top), 8px); z-index: 10; }
+
+  /* players list block sits above HUD so nothing hides beneath chips/badges */
+  .players-block { position: relative; z-index: 11; }
+
+  /* trick (played cards) area centered between players and hand */
+  .trick-wrap { position: relative; display: grid; place-items: center; min-height: 30dvh; }
+  .trick-row { display: flex; align-items: center; justify-content: center; gap: 8px; transform-origin: center; }
+
+  /* smaller trick cards on phone */
+  .trick-card { width: clamp(62px, 8.8vh, 92px); aspect-ratio: 63/88; }
+
+  /* hand grid spacing */
+  .hand-grid { gap: 8px; }
+
+  /* bottom sheet height presets */
+  .sheet-tall   { --sheet-h: 220px; }
+  .sheet-medium { --sheet-h: 140px; }
+  .sheet-compact{ --sheet-h: 96px;  }
+}
+
+/* ----- Patch: Mobile layout + desktop card styling ----- */
+:root{
+  --ink:#e8ecf3; --muted:#9aa6bd;
+  --accent:#3CC7B7; --accent2:#F5C451;
+  --radius:12px; --shadow:0 14px 36px rgba(0,0,0,.35);
+  --mat-bg: radial-gradient(120% 140% at 20% 10%, rgba(255,255,255,.05), transparent 55%),
+            radial-gradient(120% 140% at 80% 90%, rgba(0,0,0,.35), transparent 60%),
+            linear-gradient(180deg, #0c1321, #0f1a2f);
+}
+
+/* Shared card look (desktop + mobile) */
+.card-ux{ background:#fff; border-radius:12px; box-shadow:0 10px 22px rgba(0,0,0,.28); }
+.card-tap{ transition:transform .12s cubic-bezier(.2,.6,.2,1), box-shadow .12s; }
+.card-tap:active{ transform:translateY(1px) scale(.99); }
+
+@media (min-width:1024px){
+  .desk-card-w  { width: var(--cardWDesk, clamp(84px, 8.8vh, 132px)); aspect-ratio:63/88; }
+  .desk-table-w { width: var(--tableCardWDesk, clamp(96px, 10vh, 140px)); aspect-ratio:63/88; }
+}
+
+@media (max-width:1023.98px){
+  /* reserve space when bidding sheet open */
+  .pad-for-sheet{ padding-bottom: calc(var(--sheet-h, 0px) + env(safe-area-inset-bottom)); }
+  .sheet-tall{ --sheet-h: 220px; }
+
+  /* Top bar: code left, scoreboard right */
+  .m-topbar{ position: sticky; top: max(env(safe-area-inset-top),8px); z-index: 20; }
+
+  /* Compact HUD strip (smaller trump + round) */
+  .m-hud{ margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; z-index: 15; }
+  .m-trump{ padding:4px 8px; border-radius:10px; border:1px solid rgba(245,196,81,.5); background:rgba(245,196,81,.12); color:#ffe6a6; font-size:12px; line-height:1; }
+  .m-round{ padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.05); color:var(--ink); font-size:14px; line-height:1.1; }
+
+  /* Players are their own block BELOW HUD (no overlap) */
+  .m-players{ position:relative; z-index: 16; margin-top:8px; }
+
+  /* Play area mat under players */
+  .m-mat{ margin:12px 0 0 0; background:var(--mat-bg); border-radius:16px;
+          border:1px solid rgba(255,255,255,.08);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -24px 56px rgba(0,0,0,.35), var(--shadow);
+          min-height:30dvh; display:grid; place-items:center; }
+
+  /* Smaller trick cards, centered */
+  .m-trick-row{ display:flex; gap:8px; align-items:center; justify-content:center; }
+  .m-trick-card{ width: clamp(62px, 8.8vh, 92px); aspect-ratio:63/88; }
+
+  /* Hand spacing */
+  .m-hand-grid{ gap:8px; }
+}
+
+/* ---------- Shared tokens (safe to add) ---------- */
+:root{
+  --ink:#e8ecf3; --muted:#9aa6bd;
+  --accent:#3CC7B7; --accent2:#F5C451;
+  --ring:rgba(60,199,183,.5);
+  --radius:12px;
+  --mat-bg: radial-gradient(120% 140% at 20% 10%, rgba(255,255,255,.05), transparent 55%),
+            radial-gradient(120% 140% at 80% 90%, rgba(0,0,0,.35), transparent 60%),
+            linear-gradient(180deg, #0c1321, #0f1a2f);
+  --shadow:0 14px 36px rgba(0,0,0,.35);
+}
+
+/* ---------- Unified card visual (desktop + mobile) ---------- */
+.card-ux{
+  background:#fff; border-radius:12px;
+  box-shadow:0 10px 22px rgba(0,0,0,.28);
+}
+.card-tap{ transition:transform .12s cubic-bezier(.2,.6,.2,1), box-shadow .12s; }
+.card-tap:active{ transform:translateY(1px) scale(.99); }
+
+/* Desktop sizes (applied where you set widths via --cardWDesk / --tableCardWDesk) */
+@media (min-width:1024px){
+  .desk-card-w   { width: var(--cardWDesk,   clamp(84px, 8.8vh, 132px)); aspect-ratio:63/88; }
+  .desk-table-w  { width: var(--tableCardWDesk, clamp(96px, 10vh, 140px)); aspect-ratio:63/88; }
+}
+
+/* ---------- Mobile-only layout helpers ---------- */
+@media (max-width:1023.98px){
+  /* Keep page clear of bottom sheet (bidding) */
+  .pad-for-sheet { padding-bottom: calc(var(--sheet-h, 0px) + env(safe-area-inset-bottom)); }
+  .sheet-tall{ --sheet-h: 220px; }
+
+  /* Top bar with code (left) & scoreboard (right) */
+  .topbar { position: sticky; top: max(env(safe-area-inset-top), 8px); z-index: 20; }
+
+  /* Compact HUD strip: trump + round (smaller), never overlapping players */
+  .hud-strip{ margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .trump-chip-mini{
+    padding:4px 8px; border-radius:10px;
+    border:1px solid rgba(245,196,81,.5);
+    background:rgba(245,196,81,.12); color:#ffe6a6; font-size:12px; line-height:1;
+  }
+  .round-card-compact{
+    padding:8px 10px; border-radius:10px;
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.05); color:var(--ink);
+    font-size:14px; line-height:1.1;
+  }
+
+  /* Players block is its own section under HUD (separate z-layer) */
+  .players-section{ position:relative; z-index:15; margin-top:8px; }
+
+  /* Smooth table mat under players */
+  .table-mat{
+    background:var(--mat-bg);
+    border-radius:16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -24px 56px rgba(0,0,0,.35), var(--shadow);
+    border:1px solid rgba(255,255,255,.08);
+    min-height:30dvh;        /* your spec */
+    display:grid; place-items:center;
+  }
+
+  /* Trick cards smaller on phone */
+  .trick-row { display:flex; gap:8px; align-items:center; justify-content:center; }
+  .trick-card { width: clamp(62px, 8.8vh, 92px); aspect-ratio:63/88; }
+
+  /* Hand grid spacing (no overlap) */
+  .hand-grid { gap:8px; }
+}

@@ -533,32 +533,70 @@ const Index = () => {
   const isBiddingOpen = Boolean(
     effectiveGameState?.currentRound?.phase === 'bidding'
   );
+  const sheetClass = isMobile && isBiddingOpen ? 'sheet-tall' : '';
+
+  const round = effectiveGameState?.currentRound;
 
   return (
-    <div className="min-h-screen app-shell p-4" style={{ paddingBottom: isMobile && isBiddingOpen ? 'calc(96px + env(safe-area-inset-bottom))' : 'env(safe-area-inset-bottom)' }}>
+    <div className={cn("min-h-screen app-shell pad-for-sheet p-4", sheetClass)}>
       <div className="max-w-7xl mx-auto">
-        {usingServer && effectiveGameState?.id && <RoomCodePill code={effectiveGameState.id} />}
-        <div className="flex justify-end mb-2 safe-top">
+        {/* Top bar: lobby code (left) + scoreboard (right) */}
+        <div className="m-topbar mx-2 flex items-center justify-between">
           <Button variant="outline" onClick={() => setShowScoreboard(true)}>Scoreboard</Button>
+          <div className="flex items-center gap-2">
+            {usingServer && effectiveGameState?.id && <RoomCodePill code={effectiveGameState.id} />}
+          </div>
         </div>
-        <GameTable
-          gameState={effectiveGameState}
-          currentPlayer={currentPlayer}
-          onPlayCard={handlePlayCard}
-          onPlaceBid={handlePlaceBid}
-          onStartGame={handleStartGame}
-          onNextRound={handleNextRound}
-          playsLocked={playsLocked}
-          trickPopup={trickPopup && { winnerName: trickPopup.winnerName }}
-          isHost={(function(){
-            if (!usingServer) return true;
-            if (effectiveGameState.players.length === 1) return true;
-            const me = effectiveGameState.players.find(p => p.id === myId);
-            if (me && typeof (me as any).isHost !== 'undefined') return !!(me as any).isHost;
-            const hostId = (effectiveGameState as any).hostId;
-            return !!(hostId && myId && hostId === myId);
-          })()}
-        />
+
+        {/* Game banner (mobile only, during gameplay) */}
+        {effectiveGameState?.gamePhase === 'playing' && (
+          <div className="mx-2 mt-2 text-center">
+            <h1 className="text-3xl font-extrabold">Judgement</h1>
+            <p className="text-sm text-muted-foreground">The ultimate trick-taking card game</p>
+            <div className="flex justify-center gap-4 mt-2 opacity-90">
+              {[Spade, Heart, Diamond, Club].map((Icon, i) => (
+                <Icon
+                  key={i}
+                  className={cn(
+                    'w-6 h-6',
+                    i % 2 === 0 ? 'text-suit-black' : 'text-suit-red'
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* HUD strip: compact trump + compact round */}
+        <div className="mx-2 m-hud">
+          <span className="m-trump">Trump: {round?.trumpSuit ?? '—'}</span>
+          <div className="m-round">
+            <div className="font-semibold">Round {round?.roundNumber ?? 1}</div>
+            <div className="text-[12px]" style={{ color: 'var(--muted)' }}>Cards: {round?.cardsPerPlayer ?? 0}</div>
+          </div>
+        </div>
+
+        {/* PLAYERS — their own section (never overlaps HUD) */}
+        <section className="m-players mx-2">
+          <GameTable
+            gameState={effectiveGameState}
+            currentPlayer={currentPlayer}
+            onPlayCard={handlePlayCard}
+            onPlaceBid={handlePlaceBid}
+            onStartGame={handleStartGame}
+            onNextRound={handleNextRound}
+            playsLocked={playsLocked}
+            trickPopup={trickPopup && { winnerName: trickPopup.winnerName }}
+            isHost={(function(){
+              if (!usingServer) return true;
+              if (effectiveGameState.players.length === 1) return true;
+              const me = effectiveGameState.players.find(p => p.id === myId);
+              if (me && typeof (me as any).isHost !== 'undefined') return !!(me as any).isHost;
+              const hostId = (effectiveGameState as any).hostId;
+              return !!(hostId && myId && hostId === myId);
+            })()}
+          />
+        </section>
         <TrickCollectLayer trigger={collectTrig} onDone={() => setCollectTrig(null)} />
         {showScoreboard && (
           <ScoreboardModal

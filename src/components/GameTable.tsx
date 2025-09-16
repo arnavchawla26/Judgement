@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Player, GameState, Card, Suit } from '@/types/game';
 import { cn } from '@/lib/utils';
 import PlayingCard from './PlayingCard';
+import PlayAreaMobile from './PlayAreaMobile';
 import PlayerAvatar from './PlayerAvatar';
 import TrumpIndicator from './TrumpIndicator';
 import BiddingInterface from './BiddingInterface';
@@ -90,9 +91,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   const renderPlayerHand = () => {
     return (
       <div className="w-full">
-        <div className="grid gap-2 sm:gap-3 md:gap-4 grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 place-items-center px-2" style={{ ['--cardW' as any]: 'clamp(56px, 9vw, 96px)' }}>
+        <div className="m-hand-grid grid gap-2 sm:gap-3 md:gap-4 grid-cols-5 sm:grid-cols-7 lg:grid-cols-10 place-items-center px-2" style={{ ['--cardW' as any]: 'clamp(56px, 9vw, 96px)' }}>
           {currentPlayer.cards.map((card) => (
-            <div key={card.id} className="card-3d card-tap flex items-center justify-center" style={{ width: 'var(--cardW)', aspectRatio: '63/88' }}>
+            <div key={card.id} className="card-ux desk-card-w card-tap card-3d flex items-center justify-center" style={{ width: 'var(--cardW)', aspectRatio: '63/88' }}>
               <PlayingCard
                 card={card}
                 isTrump={card.suit === currentRound?.trumpSuit}
@@ -118,13 +119,20 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const renderTrickArea = () => {
     if (!currentRound?.currentTrick) return null;
+    if (isMobile) {
+      return (
+        <div className="mx-2 m-mat w-full">
+          <PlayAreaMobile cards={currentRound.currentTrick.cards as any} />
+        </div>
+      );
+    }
     return (
       <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4 min-h-[28vh] sm:min-h-[32vh] md:min-h-[38vh] lg:min-h-[44vh] w-full">
         {currentRound.currentTrick.cards.map((trickCard) => (
           <div
             key={trickCard.card.id}
             data-play-card={trickCard.card.id}
-            className="card-3d"
+            className="card-ux desk-table-w card-3d"
             style={{ width: 'clamp(72px, min(8.2vh, 12vw), 132px)', aspectRatio: '63/88' }}
           >
             <PlayingCard card={trickCard.card} size="sm" isTrump={trickCard.card.suit === currentRound.trumpSuit} />
@@ -174,6 +182,38 @@ export const GameTable: React.FC<GameTableProps> = ({
       )}
     </div>
   );
+
+  const renderMobilePlayersStrip = () => {
+    if (!isMobile) return null;
+    return (
+      <div className="mx-2 mt-2 overflow-x-auto">
+        <div className="flex gap-2">
+          {gameState.players.map((p) => {
+            const bid = currentRound?.bids?.[p.id];
+            const hands = p.tricks;
+            const isYou = p.id === currentPlayer.id;
+            const dot = p.connected === false ? 'bg-red-500' : 'bg-emerald-500';
+            return (
+              <div
+                key={p.id}
+                className={cn(
+                  'ui-pill whitespace-nowrap flex items-center gap-2 px-3 py-2',
+                  isYou && 'ring-1 ring-primary/60'
+                )}
+              >
+                <span className={cn('inline-block w-2.5 h-2.5 rounded-full', dot)} />
+                <span className={cn('font-medium', isYou && 'text-primary')}>{p.name}</span>
+                {bid !== undefined && (
+                  <span className="text-xs bg-secondary/70 rounded px-2 py-0.5">Bid: {bid}</span>
+                )}
+                <span className="text-xs bg-accent/30 rounded px-2 py-0.5">Hands: {hands}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   if (gameState.gamePhase === 'lobby') {
     return (
@@ -246,28 +286,30 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   return (
     <div className={cn('game-table lg:rounded-3xl p-4 md:p-8 min-h-[800px] relative pb-28 md:pb-4 mx-auto w-full max-w-[1200px] overflow-x-hidden', className)}>
-      {/* Players positioned around the table */}
-      <div className="absolute inset-8">
-        {positionedPlayers
-          .filter(({ player }) => player.id !== currentPlayer.id)
-          .map(({ player, position }) => (
-            <div
-              key={player.id}
-              className={cn(
-                'absolute',
-                position === 'top' && 'top-0 left-1/2 -translate-x-1/2',
-                position === 'left' && 'left-0 top-1/2 -translate-y-1/2',
-                position === 'right' && 'right-0 top-1/2 -translate-y-1/2'
-              )}
-            >
-              <PlayerAvatar
-                player={player}
-                position={position}
-                className="animate-fade-in-up"
-              />
-            </div>
-          ))}
-      </div>
+      {/* Players positioned around the table (desktop only) */}
+      {!isMobile && (
+        <div className="absolute inset-8">
+          {positionedPlayers
+            .filter(({ player }) => player.id !== currentPlayer.id)
+            .map(({ player, position }) => (
+              <div
+                key={player.id}
+                className={cn(
+                  'absolute',
+                  position === 'top' && 'top-0 left-1/2 -translate-x-1/2',
+                  position === 'left' && 'left-0 top-1/2 -translate-y-1/2',
+                  position === 'right' && 'right-0 top-1/2 -translate-y-1/2'
+                )}
+              >
+                <PlayerAvatar
+                  player={player}
+                  position={position}
+                  className="animate-fade-in-up"
+                />
+              </div>
+            ))}
+        </div>
+      )}
 
       {/* Center area */}
       <div className="flex flex-col items-center justify-center h-full gap-4 md:gap-8 mb-6">
@@ -286,7 +328,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           {renderTrickArea()}
 
           {/* Scoreboard */}
-          {renderScoreboard()}
+          {!isMobile && renderScoreboard()}
         </div>
 
         {/* Bidding interface */}
@@ -359,14 +401,25 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* Current player's hand at bottom */}
-      <div className={cn(
-        "absolute bottom-2 left-1/2 -translate-x-1/2 z-30",
-        (isBiddingPhase && isMyTurn) && "pointer-events-none opacity-90",
-        playsLocked && "pointer-events-none"
-      )}>
-        {renderPlayerHand()}
-      </div>
+      {/* Current player's hand */}
+      {isMobile ? (
+        <div className={cn(
+          "mt-3",
+          (isBiddingPhase && isMyTurn) && "pointer-events-none opacity-90",
+          playsLocked && "pointer-events-none"
+        )}>
+          {renderPlayerHand()}
+          {renderMobilePlayersStrip()}
+        </div>
+      ) : (
+        <div className={cn(
+          "absolute bottom-2 left-1/2 -translate-x-1/2 z-30",
+          (isBiddingPhase && isMyTurn) && "pointer-events-none opacity-90",
+          playsLocked && "pointer-events-none"
+        )}>
+          {renderPlayerHand()}
+        </div>
+      )}
     </div>
   );
 };
