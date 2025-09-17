@@ -1,6 +1,25 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Google tag (gtag.js) -->
+<script>
+  // disable GA locally so your own testing doesn't pollute data
+  if (location.hostname === 'localhost') {
+    window['ga-disable-G-YBK6EH6QZ0'] = true;
+  }
+</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YBK6EH6QZ0"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){ dataLayer.push(arguments); }
+  gtag('js', new Date());
+
+  // basic config; add anonymize_ip for a little extra privacy
+  gtag('config', 'G-YBK6EH6QZ0', {
+    anonymize_ip: true
+  });
+</script>
+
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
