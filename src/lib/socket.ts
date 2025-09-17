@@ -1,16 +1,33 @@
+// src/lib/socket.ts
 import type { Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
-export async function getSocket() {
+export async function getSocket(): Promise<Socket> {
   if (socket) return socket;
-  // Dynamically import to keep optional until installed
+
   const { io } = await import('socket.io-client');
-  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  socket = io(`http://${host}:4000`, {
+
+  // Use build-time env in prod (Vercel), fallback to localhost in dev
+  const envUrl = (import.meta as any).env?.VITE_SERVER_URL?.trim?.() ?? '';
+  const url = envUrl.replace?.(/\/$/, '') || (
+    typeof window !== 'undefined' && location.hostname === 'localhost'
+      ? 'http://localhost:4000'
+      : ''
+  );
+
+  if (!url) {
+    // Don’t silently fall back to demo—surface the misconfig
+    throw new Error('VITE_SERVER_URL is not set and no local fallback available.');
+  }
+
+  socket = io(url, {
     transports: ['websocket'],
+    withCredentials: true,
     autoConnect: true,
+    timeout: 7000,
   });
+
   return socket;
 }
 
@@ -21,4 +38,9 @@ export function getPlayerKey(roomCode: string) {
 
 export function setPlayerKey(roomCode: string, playerKey: string) {
   localStorage.setItem(`PLAYER_KEY:${roomCode}`, playerKey);
+}
+
+export function disconnectSocket() {
+  socket?.disconnect();
+  socket = null;
 }

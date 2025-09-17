@@ -7,11 +7,19 @@ import { Server } from 'socket.io';
 const DEV_MIN_PLAYERS = 1; // allow solo for testing
 
 const app = express();
-app.use(cors());
+
+const allowed = (process.env.CLIENT_ORIGIN || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: allowed.length ? allowed : true, credentials: true }));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: true, credentials: true } });
+const io = new Server(server, {
+  cors: { origin: allowed.length ? allowed : true, credentials: true }
+});
 
 // --- Card helpers ---
 const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -189,10 +197,7 @@ io.on('connection', (socket) => {
       io.to(socket.id).emit('errorMsg', 'Only the host can start the game');
       return;
     }
-    if (s.hostId && socket.id !== s.hostId) {
-      io.to(socket.id).emit('errorMsg', 'Only the host can start the game');
-      return;
-    }
+    
     if (s.players.length < DEV_MIN_PLAYERS) return;
     const maxCards = Math.min(10, calcMaxCards(s.players.length));
     s.players.forEach((p) => (p.tricks = 0));
