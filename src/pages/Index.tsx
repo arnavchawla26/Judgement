@@ -1,3 +1,4 @@
+// src/pages/Index.tsx
 import React, { useState, useReducer } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,23 +10,23 @@ import RoomCodePill from '@/components/RoomCodePill';
 import ScoreboardModal from '@/components/ScoreboardModal';
 import TrickCollectLayer from '@/components/TrickCollectLayer';
 import { GameState, Player, Card, GameAction } from '@/types/game';
-import { 
-  calculateMaxCards, 
-  dealCards, 
+import {
+  calculateMaxCards,
+  dealCards,
   getRandomTrumpSuit,
   calculateRoundScore,
   determineTrickWinner,
   canPlayCard,
   pickAiCard,
   getCardValue,
+  computeMaxHand,
 } from '@/utils/gameLogic';
-import { computeMaxHand } from '@/utils/gameLogic';
 import { DEV_MODE, DEV_MIN_PLAYERS, DEV_AUTO_BID_DELAY_MS, DEV_AUTO_PLAY_DELAY_MS, DISALLOW_SUM_EQUALS_HANDSIZE } from '@/config';
 import { cn } from '@/lib/utils';
-import { Spade, Heart, Diamond, Club, Users, Play } from 'lucide-react';
-import { getSocket, getPlayerKey, setPlayerKey } from '@/lib/socket';
+import { Spade, Heart, Diamond, Club, Users } from 'lucide-react';
+import { getSocket, joinRoom, rejoinLast, normalizeCode } from '@/lib/socket';
 
-// Mock game state reducer with minimal bidding/playing logic
+// ---------------- Reducer (demo/offline logic stays the same) ----------------
 const gameReducer = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
     case 'JOIN_GAME': {
@@ -39,25 +40,19 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         isActive: false,
         isDealer: state.players.length === 0,
       };
-      return {
-        ...state,
-        players: [...state.players, newPlayer],
-      };
+      return { ...state, players: [...state.players, newPlayer] };
     }
-    
+
     case 'START_GAME': {
       if (state.players.length < (DEV_MODE ? DEV_MIN_PLAYERS : 3)) return state;
-      
+
       const maxCards = computeMaxHand(state.players.length, 10);
       const { players: updatedPlayers } = dealCards(state.players, maxCards);
-      
+
       const nextState: GameState = {
         ...state,
         gamePhase: 'playing',
-        players: updatedPlayers.map((p, i) => ({
-          ...p,
-          isActive: i === 0,
-        })),
+        players: updatedPlayers.map((p, i) => ({ ...p, isActive: i === 0 })),
         currentRound: {
           roundNumber: 1,
           cardsPerPlayer: maxCards,
@@ -79,7 +74,7 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       }
       return nextState;
     }
-    
+
     case 'PLACE_BID': {
       if (!state.currentRound) return state;
       const round = { ...state.currentRound };
@@ -87,64 +82,73 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       // advance to next player for bidding
       const currentIndex = state.players.findIndex(p => p.id === round.currentPlayer);
       const nextIndex = (currentIndex + 1) % state.players.length;
-      // Optional house rule: disallow last bidder making sum == handSize
+
+      // Optional house rule guard (UI should also prevent)
       if (DISALLOW_SUM_EQUALS_HANDSIZE && Object.keys(round.bids).length === state.players.length - 1) {
-        // next is last bidder; UI should prevent, but we also guard here by allowing any bid (no-op server-side in this demo)
+        // last bidder guard — allow any bid in demo
       }
+
       round.currentPlayer = state.players[nextIndex].id;
-      
-      // all bids placed?
+
       if (DEV_MODE) console.log('[BID]', action.payload.playerId, action.payload.bid, round.bids);
+
+      // all bids placed? → start playing
       if (Object.keys(round.bids).length === state.players.length) {
         round.phase = 'playing';
-        // first player to play is the same as current order (nextIndex wraps), keep currentPlayer as is
       }
       return { ...state, currentRound: round };
     }
-    
+
     case 'PLAY_CARD': {
       if (!state.currentRound) return state;
+
       const round = { ...state.currentRound };
       const players = state.players.map(p => ({ ...p, cards: [...p.cards] }));
       const playerIndex = players.findIndex(p => p.id === action.payload.playerId);
       if (playerIndex === -1) return state;
+
       const hand = players[playerIndex].cards;
       const cardIdx = hand.findIndex(c => c.id === action.payload.card.id);
       if (cardIdx === -1) return state;
+
       const card = hand[cardIdx];
       // enforce follow-suit legality
       const leadSuit = round.currentTrick?.leadSuit;
       if (!canPlayCard(card, hand, leadSuit, round.trumpSuit)) {
         return state;
       }
+
       // remove card from hand
       hand.splice(cardIdx, 1);
-      
-      const trick = round.currentTrick ? { ...round.currentTrick, cards: [...round.currentTrick.cards] } : { id: `trick-${round.completedTricks.length + 1}`, cards: [], leadSuit: undefined };
+
+      const trick = round.currentTrick
+        ? { ...round.currentTrick, cards: [...round.currentTrick.cards] }
+        : { id: `trick-${round.completedTricks.length + 1}`, cards: [], leadSuit: undefined };
+
       if (!trick.leadSuit) trick.leadSuit = card.suit;
       trick.cards.push({ card, playerId: players[playerIndex].id, playerName: players[playerIndex].name });
       if (DEV_MODE) console.log('[PLAY]', players[playerIndex].name, card);
-      
+
       // advance current player to next
       const currentIndex = state.players.findIndex(p => p.id === round.currentPlayer);
       round.currentPlayer = state.players[(currentIndex + 1) % state.players.length].id;
       round.currentTrick = trick;
-      
+
       // if trick complete
       if (trick.cards.length === state.players.length) {
         const winnerId = determineTrickWinner(trick as any, round.trumpSuit);
         (trick as any).winner = winnerId;
         // increment tricks for winner
         const winIndex = players.findIndex(p => p.id === winnerId);
-        if (winIndex !== -1) {
-          players[winIndex].tricks += 1;
-        }
+        if (winIndex !== -1) players[winIndex].tricks += 1;
+
         if (DEV_MODE) console.log('[TRICK WON]', winnerId, trick);
+
         round.completedTricks = [...round.completedTricks, trick];
         round.currentTrick = { id: `trick-${round.completedTricks.length + 1}`, cards: [], leadSuit: undefined };
         round.currentPlayer = winnerId || round.currentPlayer;
       }
-      
+
       // if all cards played in round -> complete
       const cardsLeftTotal = players.reduce((sum, p) => sum + p.cards.length, 0);
       if (cardsLeftTotal === 0) {
@@ -168,10 +172,10 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         if (DEV_MODE) console.log('[ROUND SCORE]', newScores);
         return { ...(state as any), currentRound: round, players, scores: newScores, rounds } as any;
       }
-      
+
       return { ...state, currentRound: round, players };
     }
-    
+
     case 'NEXT_ROUND': {
       if (!state.currentRound) return state;
       const prev = state.currentRound;
@@ -196,12 +200,13 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         },
       };
     }
-    
+
     default:
       return state;
   }
 };
 
+// --------------------------- Component ---------------------------
 const Index = () => {
   const [gameState, dispatch] = useReducer(gameReducer, {
     id: 'demo-game',
@@ -213,60 +218,64 @@ const Index = () => {
     scores: {},
     rounds: [],
   });
-  
-  // Separate inputs for Join and Create sections
+
+  // Join/Create inputs
   const [joinName, setJoinName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [createName, setCreateName] = useState('');
-  const [createCode, setCreateCode] = useState<string>(() => Array.from({ length: 4 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join(''));
+  const [createCode, setCreateCode] = useState<string>(() =>
+    Array.from({ length: 4 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('')
+  );
   const [addBots, setAddBots] = useState(false);
+
+  // Mode & session
   const [isJoined, setIsJoined] = useState(false);
   const [usingServer, setUsingServer] = useState(false);
   const [remoteGameState, setRemoteGameState] = useState<GameState | null>(null);
   const [myId, setMyId] = useState<string | null>(null);
+
+  // UI state
   const [trickPopup, setTrickPopup] = useState<{ winnerId: string; winnerName: string } | null>(null);
   const [playsLocked, setPlaysLocked] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [collectTrig, setCollectTrig] = useState<any>(null);
 
-  // Normalize/jenerate lobby codes: 4 uppercase letters A-Z
-  const toLobbyCode = (value: string) =>
-    value.replace(/[^a-z]/gi, '').toUpperCase().slice(0, 4);
+  // Helpers for code
+  const toLobbyCode = (value: string) => normalizeCode(value);
   const randomLobbyCode = () =>
     Array.from({ length: 4 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('');
-  
-  const effectiveGameState = usingServer && remoteGameState ? remoteGameState : gameState;
-  // Mock current player (in real game, this would come from auth/session)
-  const currentPlayer = (effectiveGameState.players.find(p => p.id === myId) || effectiveGameState.players[0]) || {
-    id: 'demo-player',
-    name: 'You',
-    position: 0,
-    cards: [],
-    tricks: 0,
-    score: 0,
-    isActive: true,
-    isDealer: true,
-  };
 
-  const doJoin = async (name: string, code?: string) => {
-    const cleaned = name.trim();
-    if (!cleaned) return;
-    if (code && code.length === 4) {
-      // Use server flow
-      const socket = await getSocket();
+  const effectiveGameState = usingServer && remoteGameState ? remoteGameState : gameState;
+
+  // Current player (demo fallback)
+  const currentPlayer =
+    effectiveGameState.players.find(p => p.id === myId) ||
+    effectiveGameState.players[0] || {
+      id: 'demo-player',
+      name: 'You',
+      position: 0,
+      cards: [],
+      tricks: 0,
+      score: 0,
+      isActive: true,
+      isDealer: true,
+    };
+
+  // ---------------- Auto-rejoin on reload ----------------
+  React.useEffect(() => {
+    (async () => {
+      const ack = await rejoinLast();
+      if (!ack) return;
+
       setUsingServer(true);
-      // Register listeners before emitting join to avoid race
-      socket.once('room:joined', ({ playerId, playerKey }) => {
-        setMyId(playerId);
-        if (playerKey) setPlayerKey(code, playerKey);
-      });
+      setMyId(ack.playerId);
+
+      const socket = await getSocket();
+
+      // Ensure single listeners
+      socket.off('state');
       socket.on('state', (state: any) => setRemoteGameState(state as GameState));
-      const existingKey = getPlayerKey(code);
-      if (existingKey) {
-        socket.emit('room:rejoin', { roomCode: code, playerKey: existingKey, playerName: cleaned });
-      } else {
-        socket.emit('join', { roomCode: code, playerName: cleaned, playerKey: null });
-      }
+
       const onHandResolved = (payload: any) => {
         if (!payload) return;
         try {
@@ -286,23 +295,74 @@ const Index = () => {
           setPlaysLocked(false);
         }, 1600);
       };
+
+      socket.off('hand:resolved');
+      socket.off('trick:resolved');
       socket.on('hand:resolved', onHandResolved);
       socket.on('trick:resolved', onHandResolved);
-      if (addBots) socket.emit('addBots', { roomCode: code });
+
       setIsJoined(true);
+    })();
+  }, []);
+
+  // ---------------- Join/Create flow ----------------
+  const doJoin = async (name: string, code?: string) => {
+    const cleaned = name.trim();
+    if (!cleaned) return;
+
+    if (code && code.length === 4) {
+      // Server mode
+      setUsingServer(true);
+
+      try {
+        const ack = await joinRoom(code, cleaned);
+        setMyId(ack.playerId);
+
+        const socket = await getSocket();
+
+        // Ensure single listeners
+        socket.off('state');
+        socket.on('state', (state: any) => setRemoteGameState(state as GameState));
+
+        const onHandResolved = (payload: any) => {
+          if (!payload) return;
+          try {
+            setCollectTrig({
+              trick: (payload.trick || []).map((c: any) => ({
+                playerId: c.playerId,
+                card: { code: c.card?.id || c.card?.code },
+              })),
+              winnerId: payload.winnerId,
+              startedAt: Date.now(),
+            });
+          } catch {}
+          setTrickPopup({ winnerId: payload.winnerId, winnerName: payload.winnerName });
+          setPlaysLocked(true);
+          setTimeout(() => {
+            setTrickPopup(null);
+            setPlaysLocked(false);
+          }, 1600);
+        };
+
+        socket.off('hand:resolved');
+        socket.off('trick:resolved');
+        socket.on('hand:resolved', onHandResolved);
+        socket.on('trick:resolved', onHandResolved);
+
+        if (addBots) socket.emit('addBots', { roomCode: code });
+
+        setIsJoined(true);
+      } catch (err: any) {
+        alert(err?.message || 'Join failed');
+        setUsingServer(false);
+      }
     } else {
-      // Local demo flow
-      dispatch({
-        type: 'JOIN_GAME',
-        payload: {
-          playerId: 'demo-player',
-          playerName: cleaned,
-        },
-      });
+      // Demo/local only
+      dispatch({ type: 'JOIN_GAME', payload: { playerId: 'demo-player', playerName: cleaned } });
       if (addBots) {
         setTimeout(() => {
-          ['Alice', 'Bob', 'Charlie'].forEach((name, i) => {
-            dispatch({ type: 'JOIN_GAME', payload: { playerId: `bot-${i}`, playerName: name } });
+          ['Alice', 'Bob', 'Charlie'].forEach((botName, i) => {
+            dispatch({ type: 'JOIN_GAME', payload: { playerId: `bot-${i}`, playerName: botName } });
           });
         }, 300);
       }
@@ -310,6 +370,7 @@ const Index = () => {
     }
   };
 
+  // ---------------- Server / Demo actions ----------------
   const handleStartGame = async () => {
     if (usingServer && (joinCode.length === 4 || createCode.length === 4)) {
       const code = joinCode.length === 4 ? joinCode : createCode;
@@ -321,24 +382,22 @@ const Index = () => {
   };
 
   const handlePlayCard = async (card: Card) => {
-    const player = currentPlayer;
     if (usingServer && (joinCode.length === 4 || createCode.length === 4)) {
       const code = joinCode.length === 4 ? joinCode : createCode;
       const socket = await getSocket();
       socket.emit('playCard', { roomCode: code, card });
     } else {
-      dispatch({ type: 'PLAY_CARD', payload: { playerId: player.id, card } });
+      dispatch({ type: 'PLAY_CARD', payload: { playerId: currentPlayer.id, card } });
     }
   };
 
   const handlePlaceBid = async (bid: number) => {
-    const player = currentPlayer;
     if (usingServer && (joinCode.length === 4 || createCode.length === 4)) {
       const code = joinCode.length === 4 ? joinCode : createCode;
       const socket = await getSocket();
       socket.emit('placeBid', { roomCode: code, bid });
     } else {
-      dispatch({ type: 'PLACE_BID', payload: { playerId: player.id, bid } });
+      dispatch({ type: 'PLACE_BID', payload: { playerId: currentPlayer.id, bid } });
     }
   };
 
@@ -352,21 +411,23 @@ const Index = () => {
     }
   };
 
-  // Simple bot automation (local-only): when it's a bot's turn, act automatically
+  // ---------------- Demo bot (unchanged) ----------------
   React.useEffect(() => {
-    if (usingServer) return; // server mode handles state elsewhere
+    if (usingServer) return;
     if (!gameState.currentRound) return;
     if (playsLocked) return;
+
     const round = gameState.currentRound;
     const currentId = round.currentPlayer;
     const isBot = currentId && currentId.startsWith('bot-');
     if (!isBot) return;
+
     const bot = gameState.players.find(p => p.id === currentId);
     if (!bot) return;
-    const delay = DEV_AUTO_PLAY_DELAY_MS; // ms
+
+    const delay = DEV_AUTO_PLAY_DELAY_MS;
     const t = setTimeout(() => {
       if (round.phase === 'bidding') {
-        // naive bid: random from 0..cardsPerPlayer
         const bid = Math.floor(Math.random() * (round.cardsPerPlayer + 1));
         dispatch({ type: 'PLACE_BID', payload: { playerId: bot.id, bid } });
       } else if (round.phase === 'playing' && round.currentTrick) {
@@ -375,10 +436,11 @@ const Index = () => {
         dispatch({ type: 'PLAY_CARD', payload: { playerId: bot.id, card } });
       }
     }, delay);
+
     return () => clearTimeout(t);
   }, [usingServer, gameState.currentRound?.currentPlayer, gameState.currentRound?.phase, gameState.players, playsLocked]);
 
-  // Trick-winner popup and lock plays briefly after each trick
+  // ---------------- Local trick popup (demo mode) ----------------
   const prevTricksRef = React.useRef(0);
   React.useEffect(() => {
     const completed = gameState.currentRound?.completedTricks?.length || 0;
@@ -408,6 +470,7 @@ const Index = () => {
     prevTricksRef.current = completed;
   }, [gameState.currentRound?.completedTricks?.length]);
 
+  // ---------------- Join/Create screen ----------------
   if (!isJoined) {
     return (
       <div className="min-h-screen app-shell flex items-center justify-center p-4 overflow-x-hidden">
@@ -422,10 +485,7 @@ const Index = () => {
             {[Spade, Heart, Diamond, Club].map((Icon, i) => (
               <Icon
                 key={i}
-                className={cn(
-                  'w-8 h-8 animate-bounce-in',
-                  i % 2 === 0 ? 'text-suit-black' : 'text-suit-red'
-                )}
+                className={cn('w-8 h-8 animate-bounce-in', i % 2 === 0 ? 'text-suit-black' : 'text-suit-red')}
                 style={{ animationDelay: `${i * 0.1}s` }}
               />
             ))}
@@ -508,7 +568,12 @@ const Index = () => {
                   CREATE LOBBY
                 </Button>
                 <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground">
-                  <input id="add-bots" type="checkbox" checked={addBots} onChange={(e) => setAddBots(e.target.checked)} />
+                  <input
+                    id="add-bots"
+                    type="checkbox"
+                    checked={addBots}
+                    onChange={(e) => setAddBots(e.target.checked)}
+                  />
                   <label htmlFor="add-bots">Add bots</label>
                 </div>
               </div>
@@ -529,20 +594,21 @@ const Index = () => {
     );
   }
 
+  // ---------------- Main game screen ----------------
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
-  const isBiddingOpen = Boolean(
-    effectiveGameState?.currentRound?.phase === 'bidding'
-  );
+  const isBiddingOpen = Boolean(effectiveGameState?.currentRound?.phase === 'bidding');
   const sheetClass = isMobile && isBiddingOpen ? 'sheet-tall' : '';
 
   const round = effectiveGameState?.currentRound;
 
   return (
-    <div className={cn("min-h-screen app-shell pad-for-sheet p-4", sheetClass)}>
+    <div className={cn('min-h-screen app-shell pad-for-sheet p-4', sheetClass)}>
       <div className="max-w-7xl mx-auto">
-        {/* Top bar: lobby code (left) + scoreboard (right) */}
+        {/* Top bar: scoreboard (left) + room code (right) */}
         <div className="m-topbar mx-2 flex items-center justify-between">
-          <Button variant="outline" onClick={() => setShowScoreboard(true)}>Scoreboard</Button>
+          <Button variant="outline" onClick={() => setShowScoreboard(true)}>
+            Scoreboard
+          </Button>
           <div className="flex items-center gap-2">
             {usingServer && effectiveGameState?.id && <RoomCodePill code={effectiveGameState.id} />}
           </div>
@@ -555,28 +621,24 @@ const Index = () => {
             <p className="text-sm text-muted-foreground">The ultimate trick-taking card game</p>
             <div className="flex justify-center gap-4 mt-2 opacity-90">
               {[Spade, Heart, Diamond, Club].map((Icon, i) => (
-                <Icon
-                  key={i}
-                  className={cn(
-                    'w-6 h-6',
-                    i % 2 === 0 ? 'text-suit-black' : 'text-suit-red'
-                  )}
-                />
+                <Icon key={i} className={cn('w-6 h-6', i % 2 === 0 ? 'text-suit-black' : 'text-suit-red')} />
               ))}
             </div>
           </div>
         )}
 
-        {/* HUD strip: compact trump + compact round */}
+        {/* HUD strip: compact trump + round */}
         <div className="mx-2 m-hud">
           <span className="m-trump">Trump: {round?.trumpSuit ?? '—'}</span>
           <div className="m-round">
             <div className="font-semibold">Round {round?.roundNumber ?? 1}</div>
-            <div className="text-[12px]" style={{ color: 'var(--muted)' }}>Cards: {round?.cardsPerPlayer ?? 0}</div>
+            <div className="text-[12px]" style={{ color: 'var(--muted)' }}>
+              Cards: {round?.cardsPerPlayer ?? 0}
+            </div>
           </div>
         </div>
 
-        {/* PLAYERS — their own section (never overlaps HUD) */}
+        {/* Players/Table section */}
         <section className="m-players mx-2">
           <GameTable
             gameState={effectiveGameState}
@@ -587,7 +649,7 @@ const Index = () => {
             onNextRound={handleNextRound}
             playsLocked={playsLocked}
             trickPopup={trickPopup && { winnerName: trickPopup.winnerName }}
-            isHost={(function(){
+            isHost={(function () {
               if (!usingServer) return true;
               if (effectiveGameState.players.length === 1) return true;
               const me = effectiveGameState.players.find(p => p.id === myId);
@@ -597,7 +659,11 @@ const Index = () => {
             })()}
           />
         </section>
+
+        {/* Trick collect animation */}
         <TrickCollectLayer trigger={collectTrig} onDone={() => setCollectTrig(null)} />
+
+        {/* Scoreboard */}
         {showScoreboard && (
           <ScoreboardModal
             rounds={(effectiveGameState as any).rounds || []}
