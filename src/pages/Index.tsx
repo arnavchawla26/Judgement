@@ -24,7 +24,7 @@ import {
 import { DEV_MODE, DEV_MIN_PLAYERS, DEV_AUTO_BID_DELAY_MS, DEV_AUTO_PLAY_DELAY_MS, DISALLOW_SUM_EQUALS_HANDSIZE } from '@/config';
 import { cn } from '@/lib/utils';
 import { Spade, Heart, Diamond, Club, Users } from 'lucide-react';
-import { getSocket, joinRoom, rejoinLast, normalizeCode } from '@/lib/socket';
+import { getSocket, joinRoom, rejoinLast, normalizeCode, disconnectSocket } from '@/lib/socket';
 
 // ---------------- Reducer (demo/offline logic stays the same) ----------------
 const gameReducer = (state: GameState, action: GameAction): GameState => {
@@ -227,6 +227,38 @@ const Index = () => {
     Array.from({ length: 4 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('')
   );
   const [addBots, setAddBots] = useState(false);
+  //Leave Code
+const leaveRoom = async () => {
+  try {
+    const socket = await getSocket().catch(() => null as any);
+    // Stop listening so we don't still process server updates
+    socket?.off?.('state');
+    socket?.off?.('hand:resolved');
+    socket?.off?.('trick:resolved');
+
+    // Tell server we're leaving (harmless no-op if server doesn't handle it)
+    const code = (effectiveGameState as any)?.id || joinCode || createCode;
+    if (socket && code && code.length === 4) {
+      socket.emit('leave', { roomCode: code, forget: false });
+    }
+  } catch {}
+
+  // Clear saved session so auto-rejoin won't trigger
+  const room = (effectiveGameState as any)?.id || joinCode || createCode;
+  if (room) localStorage.removeItem(`PLAYER_KEY:${room}`);
+  localStorage.removeItem('LAST_ROOM');
+  localStorage.removeItem('LAST_NAME');
+
+  // Reset client UI
+  setRemoteGameState(null);
+  setUsingServer(false);
+  setIsJoined(false);
+  setMyId(null);
+
+  // Fully drop socket so server marks you disconnected
+  disconnectSocket();
+};
+
 
   // Mode & session
   const [isJoined, setIsJoined] = useState(false);
@@ -604,15 +636,23 @@ const Index = () => {
   return (
     <div className={cn('min-h-screen app-shell pad-for-sheet p-4', sheetClass)}>
       <div className="max-w-7xl mx-auto">
-        {/* Top bar: scoreboard (left) + room code (right) */}
-        <div className="m-topbar mx-2 flex items-center justify-between">
-          <Button variant="outline" onClick={() => setShowScoreboard(true)}>
-            Scoreboard
-          </Button>
-          <div className="flex items-center gap-2">
-            {usingServer && effectiveGameState?.id && <RoomCodePill code={effectiveGameState.id} />}
-          </div>
-        </div>
+        {/* Top bar: room code (left) + actions (right) */}
+<div className="m-topbar mx-2 flex items-center justify-between">
+  <div className="flex items-center gap-2">
+    {usingServer && effectiveGameState?.id && (
+      <RoomCodePill code={effectiveGameState.id} />
+    )}
+  </div>
+
+  <div className="flex items-center gap-2">
+    <Button variant="outline" onClick={() => setShowScoreboard(true)}>
+      Scoreboard
+    </Button>
+    <Button variant="destructive" onClick={leaveRoom}>
+      Leave
+    </Button>
+  </div>
+</div>
 
         {/* Game banner (mobile only, during gameplay) */}
         {effectiveGameState?.gamePhase === 'playing' && (
