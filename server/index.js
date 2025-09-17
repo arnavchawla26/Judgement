@@ -50,18 +50,23 @@ const canPlay = (card, hand, leadSuit) => {
 };
 
 const determineTrickWinner = (trick, trump) => {
-  if (!trick.cards.length) return null;
-  const lead = trick.leadSuit || trick.cards[0].card.suit;
-  let win = trick.cards[0];
-  for (let i = 1; i < trick.cards.length; i++) {
-    const cur = trick.cards[i].card;
-    const w = win.card;
-    if (cur.suit === trump && w.suit !== trump) win = trick.cards[i];
-    else if (cur.suit === trump && w.suit === trump) if (getVal(cur.rank) > getVal(w.rank)) win = trick.cards[i];
-    else if (cur.suit === lead && w.suit === lead) if (getVal(cur.rank) > getVal(w.rank)) win = trick.cards[i];
-    else if (cur.suit === lead && w.suit !== lead && w.suit !== trump) win = trick.cards[i];
+  if (!trick || !trick.cards?.length) return null;
+
+  const lead = trick.leadSuit || trick.cards[0]?.card?.suit;
+  const rankVal = (r) =>
+    r === 'A' ? 14 : r === 'K' ? 13 : r === 'Q' ? 12 : r === 'J' ? 11 : parseInt(r, 10);
+
+  // If any trumps were played, only compare those; otherwise compare only lead-suit cards
+  const pool = (() => {
+    const trumps = trick.cards.filter(p => p.card.suit === trump);
+    return trumps.length ? trumps : trick.cards.filter(p => p.card.suit === lead);
+  })();
+
+  let best = pool[0];
+  for (let i = 1; i < pool.length; i++) {
+    if (rankVal(pool[i].card.rank) > rankVal(best.card.rank)) best = pool[i];
   }
-  return win.playerId;
+  return best.playerId;
 };
 
 const scoreExact = (bid, tricks) => {
